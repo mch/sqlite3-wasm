@@ -13,6 +13,10 @@
   "devDependencies": {
     "typescript": "^5.0.4",
     "vite": "^4.3.2",
+    "vite-plugin-wasm": "^3.2.2",
     "vitest": "^0.31.0"
+  },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "^3.41.2-build12"
   }
 }

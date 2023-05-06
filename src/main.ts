@@ -3,6 +3,11 @@ import typescriptLogo from './typescript.svg'
 import viteLogo from '/vite.svg'
 import { setupCounter } from './counter.ts'
 
+const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
+worker.addEventListener('message', ({ data }) => {
+    console.log(data);
+});
+
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
     <a href="https://vitejs.dev" target="_blank">

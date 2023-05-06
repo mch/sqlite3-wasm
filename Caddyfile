@@ -1,0 +1,13 @@
+{
+	http_port 8080
+	https_port 8443
+}
+
+localhost
+
+header {
+	Cross-Origin-Embedder-Policy require-corp
+	Cross-Origin-Opener-Policy same-origin
+}
+
+reverse_proxy :5173
