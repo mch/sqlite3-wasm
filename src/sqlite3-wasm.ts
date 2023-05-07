@@ -3,12 +3,15 @@
 
 // It should create a web worker and the implementation of the API should pass messages to that
 // worker which should fulfill the request and pass the result back as another message.
+const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
 
 export function verbose() {}
 
 type Callback = (err: Error | null) => void;
+type CommandCallback = (err: Error | null, result: any) => void;
 
 enum CommandName {
+    IsReady = "IsReady",
     Open = "Open",
     Close = "Close",
     Exec = "Exec",
@@ -27,49 +30,66 @@ enum WorkerState {
 
 export class Database {
     private queue: Command[] = [];
-    private callbacks: Map<number, Callback> = new Map();
+    private callbacks: Map<number, CommandCallback> = new Map();
     private workerState: WorkerState = WorkerState.Stopped;
-    private worker;
-    private commandSerial: number = 0;
+    private commandSerial: number = 1;
+    private dbId?: number;
 
     constructor(filename: string, mode?: any, callback?: Callback) {
-        this.worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
-
-        this.worker.addEventListener('message', ({ data }) => {
+        worker.addEventListener('message', ({ data }) => {
             console.log(`Received message from worker: ${JSON.stringify(data)}`);
-            if (data === 'ready' && this.workerState === WorkerState.Stopped) {
+            if (data.command === 'IsReady' && data.result && this.workerState === WorkerState.Stopped) {
                 this.workerState = WorkerState.Started;
             }
 
             console.log(`checking for callback for command serial ${data.serial}`);
             const callback = this.callbacks.get(data.serial);
             if (callback) {
-                callback(data.error);
+                callback(data.error, data.result);
             }
 
             if (this.workerState === WorkerState.Started) {
                 const nextCommand = this.queue.shift();
                 if (nextCommand) {
-                    this.worker.postMessage(nextCommand);
+                    worker.postMessage(nextCommand);
                 }
             }
         });
 
-        this.worker.addEventListener('error', (err) => {
+        worker.addEventListener('error', (err) => {
             console.log(`Received error from worker: ${err}`);
         });
 
-        this.worker.addEventListener('messageerror', (event) => {
+        worker.addEventListener('messageerror', (event) => {
             console.log(`Received message error from worker: ${event}`);
         });
 
-        this.enqueueCommand(CommandName.Open, {
-            filename,
-            mode,
-        }, callback);
+        this.enqueueCommand(CommandName.IsReady, {}, (err: Error | null, result: any) => {
+            if (err) {
+                console.log(`Failed to check if SQLite worker is ready: ${err}`);
+                return;
+            }
+            if (!result) {
+                console.log(`SQLite worker is not ready.`);
+                return;
+            }
+            this.enqueueCommand(CommandName.Open, {
+                filename,
+                mode,
+            }, (err, result) => {
+                if (err) {
+                    console.log(`Failed to open database: ${err}`);
+                    return;
+                }
+                this.dbId = result;
+                if (callback) {
+                    callback(null);
+                }
+            });
+        });
     }
 
-    private enqueueCommand(commandName: CommandName, args: any, callback?: Callback) {
+    private enqueueCommand(commandName: CommandName, args: any, callback?: CommandCallback) {
         this.queue.push({
             command: commandName,
             serial: this.commandSerial,
@@ -90,7 +110,8 @@ export class Database {
     each(_sql: string, ..._params: any[]) {}
     exec(sql: string, callback?: Callback) {
         this.enqueueCommand(CommandName.Exec, {
-            sql
+            sql,
+            dbId: this.dbId,
         }, callback);
     }
     prepare(_sql: string, ..._params: any[]) {}
