@@ -33,10 +33,12 @@ export class Database {
     private callbacks: Map<number, CommandCallback> = new Map();
     private workerState: WorkerState = WorkerState.Stopped;
     private commandSerial: number = 1;
+    private commandInProgress = false;
     private dbId?: number;
 
     constructor(filename: string, mode?: any, callback?: Callback) {
         worker.addEventListener('message', ({ data }) => {
+            this.commandInProgress = false;
             console.log(`Received message from worker: ${JSON.stringify(data)}`);
             if (data.command === 'IsReady' && data.result && this.workerState === WorkerState.Stopped) {
                 this.workerState = WorkerState.Started;
@@ -46,14 +48,10 @@ export class Database {
             const callback = this.callbacks.get(data.serial);
             if (callback) {
                 callback(data.error, data.result);
+                this.callbacks.delete(data.serial);
             }
 
-            if (this.workerState === WorkerState.Started) {
-                const nextCommand = this.queue.shift();
-                if (nextCommand) {
-                    worker.postMessage(nextCommand);
-                }
-            }
+            this.processQueue();
         });
 
         worker.addEventListener('error', (err) => {
@@ -100,6 +98,25 @@ export class Database {
             this.callbacks.set(this.commandSerial, callback);
         }
         this.commandSerial++;
+
+        this.processQueue();
+    }
+
+    private processQueue() {
+        if (this.commandInProgress) {
+            console.log(`Already processing a command, not sending another.`);
+            return;
+        }
+
+        // TODO review worker state transitions give that it may be necessary to send IsReady to
+        // determine if further commands can be handled, etc.
+        if (this.workerState === WorkerState.Started) {
+            const nextCommand = this.queue.shift();
+            if (nextCommand) {
+                this.commandInProgress = true;
+                worker.postMessage(nextCommand);
+            }
+        }
     }
 
     close(_callback: Callback) {}
