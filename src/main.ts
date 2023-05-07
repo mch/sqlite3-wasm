@@ -7,6 +7,12 @@ import { Database, Statement } from './sqlite3-wasm';
 
 const db = new Database('test.db', null, (err) => {
     console.log(`Database constructor callback called with err: ${err}`);
+    db.exec('create table foo(id int, desc text);', (err) => {
+        console.log(`created table, ${err}`);
+        db.exec('insert into foo values(1, \'potato\');', (err) => {
+            console.log(`inserted row ${err}`);
+        });
+    })
 });
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `

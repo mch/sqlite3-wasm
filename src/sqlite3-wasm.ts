@@ -10,6 +10,8 @@ type Callback = (err: Error | null) => void;
 
 enum CommandName {
     Open = "Open",
+    Close = "Close",
+    Exec = "Exec",
 }
 
 interface Command {
@@ -25,6 +27,7 @@ enum WorkerState {
 
 export class Database {
     private queue: Command[] = [];
+    private callbacks: Map<number, Callback> = new Map();
     private workerState: WorkerState = WorkerState.Stopped;
     private worker;
     private commandSerial: number = 0;
@@ -33,9 +36,15 @@ export class Database {
         this.worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
 
         this.worker.addEventListener('message', ({ data }) => {
-            console.log(`Received message from worker: ${data}`);
+            console.log(`Received message from worker: ${JSON.stringify(data)}`);
             if (data === 'ready' && this.workerState === WorkerState.Stopped) {
                 this.workerState = WorkerState.Started;
+            }
+
+            console.log(`checking for callback for command serial ${data.serial}`);
+            const callback = this.callbacks.get(data.serial);
+            if (callback) {
+                callback(data.error);
             }
 
             if (this.workerState === WorkerState.Started) {
@@ -54,22 +63,22 @@ export class Database {
             console.log(`Received message error from worker: ${event}`);
         });
 
-        this.enqueueCommand({
-            command: CommandName.Open,
-            serial: this.commandSerial,
-            args: {
-                filename,
-                mode,
-            }
-        });
-
-        if (callback) {
-            callback(null);
-        }
+        this.enqueueCommand(CommandName.Open, {
+            filename,
+            mode,
+        }, callback);
     }
 
-    private enqueueCommand(command: Command) {
-        this.queue.push(command);
+    private enqueueCommand(commandName: CommandName, args: any, callback?: Callback) {
+        this.queue.push({
+            command: commandName,
+            serial: this.commandSerial,
+            args,
+        });
+        if (callback) {
+            console.log(`Recording callback for command serial ${this.commandSerial}`);
+            this.callbacks.set(this.commandSerial, callback);
+        }
         this.commandSerial++;
     }
 
@@ -79,7 +88,11 @@ export class Database {
     get(_sql: string, ..._params: any[]) {}
     all(_sql: string, ..._params: any[]) {}
     each(_sql: string, ..._params: any[]) {}
-    exec(_sql: string, _callback?: Callback) {}
+    exec(sql: string, callback?: Callback) {
+        this.enqueueCommand(CommandName.Exec, {
+            sql
+        }, callback);
+    }
     prepare(_sql: string, ..._params: any[]) {}
     map(_sql: string, _callback?: Callback) {}
     loadExtension(_path: string, _callback?: Callback) {}

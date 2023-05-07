@@ -1,5 +1,7 @@
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
+// TODO make this typescript
+
 const log = (...args) => console.log(...args);
 const error = (...args) => console.error(...args);
 
@@ -13,32 +15,47 @@ sqlite3InitModule({
     printErr: error,
 }).then((sqlite3) => {
     log('Worker done initializing.');
+    log('Running SQLite3 version', sqlite3.version.libVersion);
+
+    let db;
     onmessage = (event) => {
         console.log('Worker received message: ');
         console.log(event.data);
+        const { command, args } = event.data;
 
-        if (event.data.command === 'Open') {
-            // TODO if a filename other than :memory: is used and OPFS is not available, error out.
-
-            log('Running SQLite3 version', sqlite3.version.libVersion);
-            let db;
-            if ('opfs' in sqlite3) {
-                db = new sqlite3.oo1.OpfsDb('/mydb.sqlite3');
-                log('OPFS is available, created persisted database at', db.filename);
-            } else {
-                db = new sqlite3.oo1.DB('/mydb.sqlite3', 'ct');
-                log('OPFS is not available, created transient database', db.filename);
-            }
+        // TODO a single worker, multiple databases?
+        switch(command) {
+        case 'Open':
+            openDatabase(args.filename, args.mode);
+            break;
+        case 'Exec':
+            exec(args.sql);
+            break;
         }
 
+        // Respond
         postMessage({
             command: event.data.command,
             serial: event.data.serial,
             error: null,
         });
+
+        // Command handlers
+        function openDatabase(filename, mode) {
+            // TODO if a filename other than :memory: is used and OPFS is not available, error out.
+            if ('opfs' in sqlite3) {
+                db = new sqlite3.oo1.OpfsDb(filename);
+                log('OPFS is available, created persisted database at', db.filename);
+            } else {
+                db = new sqlite3.oo1.DB(filename, 'ct');
+                log('OPFS is not available, created transient database', db.filename);
+            }
+        }
+
+        function exec(sql) {
+            db.exec(sql);
+        }
     };
 
     postMessage('ready');
 });
-
-
