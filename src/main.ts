@@ -3,9 +3,10 @@ import typescriptLogo from './typescript.svg'
 import viteLogo from '/vite.svg'
 import { setupCounter } from './counter.ts'
 
-const worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
-worker.addEventListener('message', ({ data }) => {
-    console.log(data);
+import { Database, Statement } from './sqlite3-wasm';
+
+const db = new Database('test.db', null, (err) => {
+    console.log(`Database constructor callback called with err: ${err}`);
 });
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
