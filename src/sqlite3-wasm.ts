@@ -29,7 +29,7 @@ export class Database {
     private worker;
     private commandSerial: number = 0;
 
-    constructor(filename: string, mode: any, _callback?: Callback) {
+    constructor(filename: string, mode?: any, callback?: Callback) {
         this.worker = new Worker(new URL('worker.js', import.meta.url), { type: 'module' });
 
         this.worker.addEventListener('message', ({ data }) => {
@@ -62,6 +62,10 @@ export class Database {
                 mode,
             }
         });
+
+        if (callback) {
+            callback(null);
+        }
     }
 
     private enqueueCommand(command: Command) {

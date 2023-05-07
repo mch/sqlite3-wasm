@@ -8,4 +8,11 @@ export default defineConfig({
     optimizeDeps: {
         exclude: ['@sqlite.org/sqlite-wasm'],
     },
+    test: {
+        browser: {
+            enabled: true,
+            name: 'chrome',
+        }
+    },
 });
+
